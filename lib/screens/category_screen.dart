@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import '../services/api_services.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../providers/jokes_provider.dart';
 import '../widgets/category_card_widget.dart';
 import 'jokes_screen.dart';
 import 'random_joke_screen.dart';
+import 'favorite_jokes_screen.dart';
 
 class CategoryScreen extends StatefulWidget {
   @override
@@ -10,13 +13,35 @@ class CategoryScreen extends StatefulWidget {
 }
 
 class _CategoryScreenState extends State<CategoryScreen> {
-  final ApiService _apiService = ApiService();
-  late Future<List<String>> _categories;
+  late Future<List<String>> _categoriesFuture;
+  String? _fcmToken;
 
   @override
   void initState() {
     super.initState();
-    _categories = _apiService.fetchCategories();
+
+    final jokesProvider = Provider.of<JokesProvider>(context, listen: false);
+    _categoriesFuture = jokesProvider.fetchCategories();
+
+    FirebaseMessaging.instance.requestPermission();
+    FirebaseMessaging.instance.getToken().then((token) {
+      setState(() {
+        _fcmToken = token;
+      });
+      print('FCM Token: $_fcmToken');
+    });
+
+    FirebaseMessaging.onMessage.listen((message) {
+      if (message.notification != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              message.notification!.title ?? 'Notification received',
+            ),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -34,36 +59,65 @@ class _CategoryScreenState extends State<CategoryScreen> {
               );
             },
           ),
+          IconButton(
+            icon: Icon(Icons.favorite),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => FavoriteJokesScreen()),
+              );
+            },
+          ),
         ],
       ),
-      body: FutureBuilder<List<String>>(
-        future: _categories,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else {
-            final categories = snapshot.data!;
-            return ListView.builder(
-              itemCount: categories.length,
-              itemBuilder: (context, index) {
-                return CategoryCardWidget(
-                  category: categories[index],
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            JokesScreen(category: categories[index]),
-                      ),
-                    );
-                  },
-                );
+      body: Column(
+        children: [
+          if (_fcmToken != null)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'FCM Token: $_fcmToken',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+          Expanded(
+            child: FutureBuilder<List<String>>(
+              future: _categoriesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error: ${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  );
+                } else {
+                  final categories = snapshot.data!;
+                  return ListView.builder(
+                    itemCount: categories.length,
+                    itemBuilder: (context, index) {
+                      return CategoryCardWidget(
+                        category: categories[index],
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  JokesScreen(category: categories[index]),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                }
               },
-            );
-          }
-        },
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import '../services/api_services.dart';
+import 'package:provider/provider.dart';
+import '../providers/jokes_provider.dart';
 import '../models/joke_model.dart';
 
 class RandomJokeScreen extends StatelessWidget {
-  final ApiService _apiService = ApiService();
-
   @override
   Widget build(BuildContext context) {
+    final jokesProvider = Provider.of<JokesProvider>(context, listen: false);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Random Joke'),
       ),
       body: FutureBuilder<Joke>(
-        future: _apiService.fetchRandomJoke(),
+        future: jokesProvider.fetchRandomJoke(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator());
